@@ -23,14 +23,19 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		case "GET":
 			resp, err := json.Marshal(h.links)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			fmt.Fprintf(w, string(resp))
 		case "POST":
 			fmt.Fprintf(w, "Created a new short URL")
 		case "DELETE":
-			fmt.Fprintf(w, "Deleted all links")
+			err := ioutil.WriteFile("links.json", []byte(""), 0644)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		}
 		return
 	}
