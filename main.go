@@ -1,16 +1,32 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
 
-func rootHandler(w http.ResponseWriter, r *http.Request) {
+type link struct {
+	ID          string
+	Destination string
+}
+
+type handler struct {
+	links []link
+}
+
+func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		switch r.Method {
 		case "GET":
-			fmt.Fprintf(w, "All links")
+			resp, err := json.Marshal(h.links)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprintf(w, string(resp))
 		case "POST":
 			fmt.Fprintf(w, "Created a new short URL")
 		case "DELETE":
@@ -35,10 +51,20 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", rootHandler)
+	data, err := ioutil.ReadFile("links.json")
+	if err != nil {
+		panic(err)
+	}
+
+	var h handler
+	if err := json.Unmarshal(data, &h.links); err != nil {
+		panic(err)
+	}
+
+	http.HandleFunc("/", h.rootHandler)
 	http.HandleFunc("/invite/", inviteHandler)
 	http.HandleFunc("/new/", createHandler)
 
-	fmt.Printf("Server started at http://localhost:8080")
+	fmt.Println("Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe("localhost:8080", nil))
 }
