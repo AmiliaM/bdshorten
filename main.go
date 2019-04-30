@@ -1,7 +1,6 @@
 package main
 
 import (
-	//"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -49,19 +48,16 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 			b, err := ioutil.ReadAll(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Printf("Err1: %s", err)
 				return
 			}
-			fmt.Printf("Bytes recieved: %s", b)
 			if err := json.Unmarshal(b, &l); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Printf("Err2: %s", err)
 				return
 			}
+
 			stmt, err := h.db.Prepare("INSERT INTO links (symbol, destination, expiry) VALUES ($1, $2, $3);")
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Println(err)
 				return
 			}
 			if _, err := stmt.Exec(l.Symbol, l.Destination, l.Expiry); err != nil {
@@ -71,7 +67,7 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 
 			fmt.Fprintf(w, string(b))
 		case "DELETE":
-			err := ioutil.WriteFile("links.json", []byte(""), 0644)
+			_, err := h.db.Exec("DELETE FROM links")
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
