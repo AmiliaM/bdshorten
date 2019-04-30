@@ -1,7 +1,7 @@
 package main
 
 import (
-	"database/sql"
+	//"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -15,7 +15,7 @@ type link struct {
 	Symbol      string
 	Destination string
 	Timestamp   string
-	Expiry      sql.NullString
+	Expiry      *string
 }
 
 type handler struct {
@@ -44,7 +44,32 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		case "HEAD":
 			w.WriteHeader(http.StatusOK)
 		case "POST":
-			fmt.Fprintf(w, "Created a new short URL")
+			var l link
+
+			b, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Printf("Err1: %s", err)
+				return
+			}
+			fmt.Printf("Bytes recieved: %s", b)
+			if err := json.Unmarshal(b, &l); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Printf("Err2: %s", err)
+				return
+			}
+			stmt, err := h.db.Prepare("INSERT INTO links (symbol, destination, expiry) VALUES ($1, $2, $3);")
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Println(err)
+				return
+			}
+			if _, err := stmt.Exec(l.Symbol, l.Destination, l.Expiry); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			fmt.Fprintf(w, string(b))
 		case "DELETE":
 			err := ioutil.WriteFile("links.json", []byte(""), 0644)
 			if err != nil {
