@@ -1,27 +1,41 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"io/ioutil"
 	"log"
 	"net/http"
 )
 
 type link struct {
-	ID          string
+	Symbol      string
 	Destination string
+	Timestamp   string
+	Expiry      sql.NullString
 }
 
 type handler struct {
-	links []link
+	db *sqlx.DB
+}
+
+func (h *handler) getLinks() ([]byte, error) {
+	var links []link
+	err := h.db.Select(&links, "SELECT symbol, timestamp, expiry, destination FROM links WHERE NOT deleted")
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(links)
 }
 
 func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		switch r.Method {
 		case "GET":
-			resp, err := json.Marshal(h.links)
+			resp, err := h.getLinks()
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -56,15 +70,14 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	data, err := ioutil.ReadFile("links.json")
+	db, err := sqlx.Connect("postgres", "user=amilia dbname=bdshorten sslmode=disable")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
+	defer db.Close()
 
 	var h handler
-	if err := json.Unmarshal(data, &h.links); err != nil {
-		panic(err)
-	}
+	h.db = db
 
 	http.HandleFunc("/", h.rootHandler)
 	http.HandleFunc("/invite/", inviteHandler)
