@@ -11,10 +11,12 @@ import (
 )
 
 type link struct {
+	ID          int64
 	Symbol      string
 	Destination string
 	Timestamp   string
 	Expiry      *string
+	Deleted     bool
 }
 
 type handler struct {
@@ -81,7 +83,18 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case "GET":
-		fmt.Fprintf(w, "The destination for %s", r.URL.Path[1:])
+		var l link
+		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1", r.URL.Path[1:])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		resp, err := json.Marshal(l)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, string(resp))
 	case "DELETE":
 		fmt.Fprintf(w, "Deleted short URL %s", r.URL.Path[1:])
 	}
