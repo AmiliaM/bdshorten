@@ -41,6 +41,8 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			fmt.Fprintf(w, string(resp))
+		case "HEAD":
+			w.WriteHeader(http.StatusOK)
 		case "POST":
 			fmt.Fprintf(w, "Created a new short URL")
 		case "DELETE":
@@ -50,6 +52,9 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.Header().Add("Allow", "GET, HEAD, POST, DELETE")
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 		return
 	}
