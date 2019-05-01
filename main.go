@@ -96,7 +96,13 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, string(resp))
 	case "DELETE":
-		fmt.Fprintf(w, "Deleted short URL %s", r.URL.Path[1:])
+		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", r.URL.Path[1:])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println(err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
