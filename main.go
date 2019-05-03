@@ -8,10 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 )
 
 type link struct {
-	ID          int64
 	Symbol      string
 	Destination string
 	Timestamp   string
@@ -124,10 +124,21 @@ func main() {
 	var h handler
 	h.db = db
 
+	ticker := time.NewTicker(6 * time.Minute)
+
+	go func() {
+		for range ticker.C {
+			_, err := h.db.Exec("DELETE FROM links WHERE expiry < current_timestamp")
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}()
+
 	http.HandleFunc("/", h.rootHandler)
 	http.HandleFunc("/invite/", inviteHandler)
 	http.HandleFunc("/new/", createHandler)
 
-	fmt.Println("Server started at http://localhost:8080")
+	log.Println("Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe("localhost:8080", nil))
 }
