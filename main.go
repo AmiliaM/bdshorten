@@ -84,7 +84,7 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		var l link
-		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1", r.URL.Path[1:])
+		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1 AND expiry < current_timestamp", r.URL.Path[1:])
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -124,11 +124,15 @@ func main() {
 	var h handler
 	h.db = db
 
-	ticker := time.NewTicker(6 * time.Minute)
+	ticker := time.NewTicker(6 * time.Hour)
 
 	go func() {
+		stmt, err := h.db.Prepare("DELETE FROM links WHERE expiry + '5d' < current_timestamp")
+		if err != nil {
+			log.Fatal(err)
+		}
 		for range ticker.C {
-			_, err := h.db.Exec("DELETE FROM links WHERE expiry < current_timestamp")
+			_, err := stmt.Exec()
 			if err != nil {
 				log.Println(err)
 			}
