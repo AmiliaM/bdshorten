@@ -34,16 +34,13 @@ func (h *handler) getLinks() ([]byte, error) {
 }
 
 func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Print("hello")
 	if r.URL.Path == "/" {
 		fmt.Fprintf(w, "root")
 		return
 	}
 	var l link
-	fmt.Println("\"", r.URL.Path[1:], "\"")
 	err := h.db.Get(&l, "SELECT destination FROM links WHERE symbol = $1 AND (expiry IS NULL OR expiry < current_timestamp)", r.URL.Path[1:])
 	if err != nil {
-		fmt.Println(err)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -117,7 +114,6 @@ func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
 		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", r.URL.Path[7:])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			fmt.Println(err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
