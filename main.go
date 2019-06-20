@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 type link struct {
@@ -33,7 +34,24 @@ func (h *handler) getLinks() ([]byte, error) {
 }
 
 func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Print("hello")
 	if r.URL.Path == "/" {
+		fmt.Fprintf(w, "root")
+		return
+	}
+	var l link
+	fmt.Println("\"", r.URL.Path[1:], "\"")
+	err := h.db.Get(&l, "SELECT destination FROM links WHERE symbol = $1 AND (expiry IS NULL OR expiry < current_timestamp)", r.URL.Path[1:])
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	http.Redirect(w, r, l.Destination, http.StatusFound)
+}
+
+func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/links/" {
 		switch r.Method {
 		case "GET":
 			resp, err := h.getLinks()
@@ -84,9 +102,9 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		var l link
-		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1 AND expiry < current_timestamp", r.URL.Path[1:])
+		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1 AND (expiry IS NULL OR expiry < current_timestamp)", r.URL.Path[7:])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		resp, err := json.Marshal(l)
@@ -96,9 +114,9 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, string(resp))
 	case "DELETE":
-		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", r.URL.Path[1:])
+		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", r.URL.Path[7:])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			fmt.Println(err)
 			return
 		}
@@ -106,11 +124,11 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func inviteHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) inviteHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "This is an invite")
 }
 
-func createHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) createHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>Create a new short URL</h1>")
 }
 
@@ -125,9 +143,8 @@ func main() {
 	h.db = db
 
 	ticker := time.NewTicker(6 * time.Hour)
-
 	go func() {
-		stmt, err := h.db.Prepare("DELETE FROM links WHERE expiry + '5d' < current_timestamp")
+		stmt, err := h.db.Prepare("DELETE FROM links WHERE expiry NOT NULL AND expiry + '5d' < current_timestamp")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -140,8 +157,9 @@ func main() {
 	}()
 
 	http.HandleFunc("/", h.rootHandler)
-	http.HandleFunc("/invite/", inviteHandler)
-	http.HandleFunc("/new/", createHandler)
+	http.HandleFunc("/links/", h.linkHandler)
+	http.HandleFunc("/invite/", h.inviteHandler)
+	http.HandleFunc("/new/", h.createHandler)
 
 	log.Println("Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe("localhost:8080", nil))
