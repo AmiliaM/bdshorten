@@ -7,3 +7,13 @@ CREATE TABLE public.links (
     deleted boolean DEFAULT false NOT NULL,
     CONSTRAINT links_check CHECK ((expiry > "timestamp"))
 );
+
+CREATE VIEW public.validlinks AS
+ SELECT links.id,
+    links.symbol,
+    links.destination,
+    links."timestamp",
+    links.expiry,
+    links.deleted
+   FROM public.links
+  WHERE (((links.expiry IS NULL) OR (links.expiry > CURRENT_TIMESTAMP)) AND (NOT links.deleted));

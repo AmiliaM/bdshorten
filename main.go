@@ -26,11 +26,16 @@ type handler struct {
 
 func (h *handler) getLinks() ([]byte, error) {
 	var links []link
-	err := h.db.Select(&links, "SELECT symbol, timestamp, expiry, destination FROM links WHERE NOT deleted")
+	err := h.db.Select(&links, "SELECT * FROM validlinks")
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(links)
+}
+
+func (h *handler) getLink(l *link) error {
+	err := h.db.Get(&l, "SELECT * FROM validlinks WHERE symbol = $1", l.Symbol)
+	return err
 }
 
 func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +43,8 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "root")
 		return
 	}
-	var l link
-	err := h.db.Get(&l, "SELECT destination FROM links WHERE symbol = $1 AND (expiry IS NULL OR expiry < current_timestamp)", r.URL.Path[1:])
-	if err != nil {
+	l := link{Symbol: r.URL.Path[1:]}
+	if err := h.getLink(&l); err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -98,9 +102,8 @@ func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case "GET":
-		var l link
-		err := h.db.Get(&l, "SELECT symbol, destination, timestamp, expiry FROM links WHERE symbol = $1 AND (expiry IS NULL OR expiry < current_timestamp)", r.URL.Path[7:])
-		if err != nil {
+		l := link{Symbol: r.URL.Path[7:]}
+		if err := h.getLink(&l); err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -140,7 +143,7 @@ func main() {
 
 	ticker := time.NewTicker(6 * time.Hour)
 	go func() {
-		stmt, err := h.db.Prepare("DELETE FROM links WHERE expiry NOT NULL AND expiry + '5d' < current_timestamp")
+		stmt, err := h.db.Prepare("DELETE FROM links WHERE expiry IS NOT NULL AND expiry + '5d' < current_timestamp")
 		if err != nil {
 			log.Fatal(err)
 		}
