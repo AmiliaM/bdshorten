@@ -17,3 +17,10 @@ CREATE VIEW public.validlinks AS
     links.deleted
    FROM public.links
   WHERE (((links.expiry IS NULL) OR (links.expiry > CURRENT_TIMESTAMP)) AND (NOT links.deleted));
+
+CREATE TABLE public.tokens (
+    id SERIAL PRIMARY KEY,
+    token text UNIQUE NOT NULL,
+    role smallint DEFAULT 1 NOT NULL,
+    description text
+);
