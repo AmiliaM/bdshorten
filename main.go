@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -49,6 +51,13 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, l.Destination, http.StatusFound)
+}
+
+func newIdent(len int64) string {
+	b := make([]byte, len)
+	rand.Read(b)
+	token := base64.URLEncoding.EncodeToString(b)
+	return token[:len]
 }
 
 func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
