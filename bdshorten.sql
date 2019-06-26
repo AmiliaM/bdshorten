@@ -22,5 +22,6 @@ CREATE TABLE public.tokens (
     id SERIAL PRIMARY KEY,
     token text UNIQUE NOT NULL,
     role smallint DEFAULT 1 NOT NULL,
-    description text
+    description text,
+    CONSTRAINT token_len CHECK ((char_length(token) = 42))
 );

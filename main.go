@@ -26,6 +26,28 @@ type handler struct {
 	db *sqlx.DB
 }
 
+type token struct {
+	ID          int
+	Token       string
+	Role        int16
+	Description string
+}
+
+func newIdent(len int64) string {
+	b := make([]byte, len)
+	rand.Read(b)
+	token := base64.URLEncoding.EncodeToString(b)
+	return token[:len]
+}
+
+func (h *handler) checkToken(t *token) int16 {
+	err := h.db.Get(t, "SELECT * FROM tokens WHERE token = $1", t.Token)
+	if err != nil {
+		return 0
+	}
+	return t.Role
+}
+
 func (h *handler) getLinks() ([]byte, error) {
 	var links []link
 	err := h.db.Select(&links, "SELECT * FROM validlinks")
@@ -51,13 +73,6 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, l.Destination, http.StatusFound)
-}
-
-func newIdent(len int64) string {
-	b := make([]byte, len)
-	rand.Read(b)
-	token := base64.URLEncoding.EncodeToString(b)
-	return token[:len]
 }
 
 func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
