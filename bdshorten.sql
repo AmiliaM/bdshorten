@@ -5,6 +5,7 @@ CREATE TABLE public.links (
     "timestamp" timestamp with time zone DEFAULT current_timestamp NOT NULL,
     expiry timestamp with time zone,
     deleted boolean DEFAULT false NOT NULL,
+    token integer,
     CONSTRAINT links_check CHECK ((expiry > "timestamp"))
 );
 
@@ -25,3 +26,6 @@ CREATE TABLE public.tokens (
     description text,
     CONSTRAINT token_len CHECK ((char_length(token) = 42))
 );
+
+ALTER TABLE ONLY public.links
+    ADD CONSTRAINT links_token_fkey FOREIGN KEY (token) REFERENCES public.tokens(id);

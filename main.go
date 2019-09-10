@@ -15,11 +15,13 @@ import (
 )
 
 type link struct {
+	ID          int
 	Symbol      string
 	Destination string
 	Timestamp   string
 	Expiry      *string
 	Deleted     bool
+	Token       *string
 }
 
 type handler struct {
@@ -48,17 +50,29 @@ func (h *handler) checkToken(t *token) int16 {
 	return t.Role
 }
 
-func (h *handler) getLinks() ([]byte, error) {
+func (h *handler) getLinks(role int16) ([]byte, error) {
 	var links []link
-	err := h.db.Select(&links, "SELECT * FROM validlinks")
+	var err error
+	switch role {
+	case 3:
+		err = h.db.Select(&links, "SELECT * FROM links")
+	default:
+		err = h.db.Select(&links, "SELECT * FROM validlinks")
+	}
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(links)
 }
 
-func (h *handler) getLink(l *link) error {
-	err := h.db.Get(&l, "SELECT * FROM validlinks WHERE symbol = $1", l.Symbol)
+func (h *handler) getLink(l *link, role int16) error {
+	var err error
+	switch role {
+	case 3:
+		err = h.db.Get(l, "SELECT * FROM links WHERE symbol = $1", l.Symbol)
+	default:
+		err = h.db.Get(l, "SELECT * FROM validlinks WHERE symbol = $1", l.Symbol)
+	}
 	return err
 }
 
@@ -68,7 +82,7 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l := link{Symbol: r.URL.Path[1:]}
-	if err := h.getLink(&l); err != nil {
+	if err := h.getLink(&l, 0); err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -76,10 +90,15 @@ func (h *handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
+	t := token{Token: "LOL"}
+	if h.checkToken(&t) == 0 {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	if r.URL.Path == "/links/" {
 		switch r.Method {
 		case "GET":
-			resp, err := h.getLinks()
+			resp, err := h.getLinks(t.Role)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -112,7 +131,13 @@ func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
 
 			fmt.Fprintf(w, string(b))
 		case "DELETE":
-			_, err := h.db.Exec("DELETE FROM links")
+			var err error
+			switch t.Role {
+			case 3:
+				_, err = h.db.Exec("UPDATE validlinks SET deleted = true")
+			default:
+				_, err = h.db.Exec("UPDATE validlinks SET deleted = true WHERE token = $1")
+			}
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -127,7 +152,7 @@ func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		l := link{Symbol: r.URL.Path[7:]}
-		if err := h.getLink(&l); err != nil {
+		if err := h.getLink(&l, t.Role); err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -138,7 +163,16 @@ func (h *handler) linkHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, string(resp))
 	case "DELETE":
-		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", r.URL.Path[7:])
+		l := link{Symbol: r.URL.Path[7:]}
+		if err := h.getLink(&l, t.Role); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if t.Token != *l.Token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, err := h.db.Exec("DELETE FROM links WHERE symbol = $1", l.Symbol)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
