@@ -1,34 +1,33 @@
-use actix_web::{web, App, HttpServer, Responder};
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc, TimeZone};
+use actix_web::{App, HttpServer, Responder, web};
+use chrono::{DateTime, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-struct Token {
-	id: i32,
-	token: String,
-	auth: i16,
-	user: String,
-	created: String,
-}
-
 struct Link {
-	id: i32,
-	slug: String,
+	id:          i32,
+	slug:        String,
 	destination: Url,
-	created: DateTime<Utc>,
-	expiry: DateTime<Utc>,
-	deleted: bool,
-	token: i32,
+	created:     DateTime<Utc>,
+	expiry:      DateTime<Utc>,
+	deleted:     bool,
+	token:       i32,
 }
 
 #[derive(Serialize, Deserialize)]
 struct APILink {
-	slug: Option<String>,
+	slug:        Option<String>,
 	destination: Url,
-	created: DateTime<Utc>,
-	expiry: Option<DateTime<Utc>>,
+	created:     DateTime<Utc>,
+	expiry:      Option<DateTime<Utc>>,
 }
 
+struct Token {
+	id:      i32,
+	token:   String,
+	auth:    i16,
+	user:    String,
+	created: String,
+}
 
 async fn handle_index() -> impl Responder {
 	web::Json(APILink {
@@ -89,14 +88,14 @@ async fn handle_new_invite() -> impl Responder {
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
 	HttpServer::new(|| { App::new()
-		.route("/", web::get().to(handle_index))
-		.route("/{link}", web::get().to(handle_redirect))
-		.route("/links", web::get().to(handle_get_links))
-		.route("/links", web::post().to(handle_new_link))
+		.route("/",             web::get().to(handle_index))
+		.route("/{link}",       web::get().to(handle_redirect))
+		.route("/links",        web::get().to(handle_get_links))
+		.route("/links",        web::post().to(handle_new_link))
 		.route("/links/{link}", web::get().to(handle_get_link))
 		.route("/links/{link}", web::delete().to(handle_delete_link))
-		.route("/invite/{token}", web::get().to(handle_new_token))
-		.route("/invites", web::post().to(handle_new_invite))
+		.route("/invite/{id}",  web::get().to(handle_new_token))
+		.route("/invites",      web::post().to(handle_new_invite))
 	})
 	.bind("127.0.0.1:8088")?
 	.run()
