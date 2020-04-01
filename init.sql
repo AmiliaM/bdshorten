@@ -35,6 +35,6 @@ CREATE VIEW validlinks AS
 		destination,
 		created,
 		expiry,
-		token
+		author
 	FROM links
 	WHERE (((expiry IS NULL) OR (expiry > CURRENT_TIMESTAMP)) AND (NOT deleted));

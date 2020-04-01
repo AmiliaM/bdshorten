@@ -20,4 +20,3 @@ tokio = "0.2"
 tokio-postgres = "0.5"
 postgres-types = { version = "0.1", features = ["derive", "with-chrono-0_4"] }
 url = { version = "2", features = ["serde"] }
-env_logger = "*"
