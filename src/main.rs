@@ -47,12 +47,6 @@ fn rows_to_links(rows: Vec<tokio_postgres::row::Row>) -> Vec<APILink> {
 	links
 }
 
-// /
-async fn handle_index() -> impl Responder {
-	HttpResponse::NotFound().finish()
-}
-
-// /go/{link}
 async fn handle_redirect(db: Db, ident: Path<String>) -> impl Responder {
 	let q = db.get_ref().query_opt("SELECT destination FROM validlinks WHERE slug = $1", &[&*ident]).await;
 	let dest = match q {
@@ -66,7 +60,6 @@ async fn handle_redirect(db: Db, ident: Path<String>) -> impl Responder {
 		.finish()
 }
 
-// /links/
 async fn handle_get_links(db: Db, r: HttpRequest) -> impl Responder {
 	let token = match r.headers().get("Authorization") {
 		Some(h) => h.to_str().unwrap(),
@@ -129,7 +122,7 @@ async fn handle_new_link(db: Db, body: Json<APILink>, r: HttpRequest) -> impl Re
 		_ => new_ident(8),
 	};
 
-	for i in 0..5 { // 5 tries
+	for i in 0..5 { // 5 tries to make valid slug
 		let q = db.get_ref().query_opt(
 			"SELECT token FROM tokens INNER JOIN links ON tokens.id = links.author WHERE slug = $1;",
 			&[&slug]).await;
@@ -193,7 +186,6 @@ async fn handle_new_link(db: Db, body: Json<APILink>, r: HttpRequest) -> impl Re
 	})
 }
 
-// /links/{link}
 async fn handle_get_link(db: Db, ident: Path<String>, r: HttpRequest) -> impl Responder {
 	let token = match r.headers().get("Authorization") {
 		Some(h) => h.to_str().unwrap(),
@@ -256,7 +248,6 @@ async fn handle_delete_link(db: Db, ident: Path<String>, r: HttpRequest) -> impl
 	}
 }
 
-// /invite/{token}
 async fn handle_new_token(db: Db, token: Path<String>, body: Json<HashMap<String, String>>) -> impl Responder {
 	let user = match body.get("user") {
 		Some(u) => u,
@@ -297,7 +288,6 @@ async fn handle_new_token(db: Db, token: Path<String>, body: Json<HashMap<String
 	HttpResponse::Ok().json(("token", token))
 }
 
-// /invites/
 async fn handle_new_invite(db: Db, body: Json<Invite>, r: HttpRequest) -> impl Responder {
 	let token = match r.headers().get("Authorization") {
 		Some(h) => h.to_str().unwrap(),
@@ -352,7 +342,8 @@ async fn handle_new_invite(db: Db, body: Json<Invite>, r: HttpRequest) -> impl R
 
 #[actix_rt::main]
 async fn main() -> Result<(), Error> {
-	let (client, connection) = postgres::connect("host=localhost user=amilia dbname=linkshortener", NoTls).await?;
+	let conn_str = "host=localhost user=bdshorten dbname=bdshorten";
+	let (client, connection) = postgres::connect(conn_str, NoTls).await?;
 	let client = web::Data::new(client);
 	tokio::spawn(async move {
 		if let Err(e) = connection.await {
@@ -365,14 +356,13 @@ async fn main() -> Result<(), Error> {
 
 	Ok(HttpServer::new(move || {App::new()
 		.app_data(client.clone())
-		.route("/",             web::get().to(handle_index))
-		.route("/go/{link}",    web::get().to(handle_redirect))
-		.route("/links",        web::get().to(handle_get_links))
-		.route("/links",        web::post().to(handle_new_link))
-		.route("/links/{link}", web::get().to(handle_get_link))
-		.route("/links/{link}", web::delete().to(handle_delete_link))
-		.route("/invite/{id}",  web::post().to(handle_new_token))
-		.route("/invites",      web::post().to(handle_new_invite))
+		.route("/{link}",    web::get().to(handle_redirect))
+		.route("/api/links",        web::get().to(handle_get_links))
+		.route("/api/links",        web::post().to(handle_new_link))
+		.route("/api/links/{link}", web::get().to(handle_get_link))
+		.route("/api/links/{link}", web::delete().to(handle_delete_link))
+		.route("/api/invite/{id}",  web::post().to(handle_new_token))
+		.route("/api/invites",      web::post().to(handle_new_invite))
 	})
 	.bind(&bind)?
 	.run()

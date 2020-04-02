@@ -26,8 +26,8 @@ CREATE TABLE invites (
 	auth smallint DEFAULT 1 NOT NULL,
 	created timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	used boolean DEFAULT false NOT NULL,
-	CONSTRAINT ident_len CHECK ((char_length(ident) = 32))
-)
+	CONSTRAINT ident_len CHECK ((char_length(token) = 32))
+);
 
 CREATE VIEW validlinks AS
 	SELECT id,
