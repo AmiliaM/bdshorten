@@ -1,6 +1,6 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, http::header, web::{self, Json, Path}};
 use base64;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use failure::Error;
 use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -49,13 +49,7 @@ fn rows_to_links(rows: Vec<tokio_postgres::row::Row>) -> Vec<APILink> {
 
 // /
 async fn handle_index() -> impl Responder {
-	//FIXME: meaningful return
-	Json(APILink {
-		slug: Some("1234".to_string()),
-		destination: Url::parse("http://google.com").unwrap(),
-		created: Some(Utc.timestamp(1431648000, 0)),
-		expiry: None
-	})
+	HttpResponse::NotFound().finish()
 }
 
 // /go/{link}
@@ -119,20 +113,65 @@ async fn handle_new_link(db: Db, body: Json<APILink>, r: HttpRequest) -> impl Re
 		Err(_) => return HttpResponse::InternalServerError().finish(),
 	};
 
-	let slug = match auth {
+	let mut chosen_slug = false;
+	let mut slug = match auth {
 		2 => {
 			let mut s = slug.unwrap_or_else(| | new_ident(6));
 			if s.len() < 6 {
 				s += &new_ident(6 - s.len());
-			}
+			} else { chosen_slug = true }
 			s
 		},
-		3 => slug.unwrap_or_else(| | new_ident(4)),
+		3 => {
+			chosen_slug = true;
+			slug.unwrap_or_else(| | { chosen_slug = false; new_ident(4) })
+		},
 		_ => new_ident(8),
 	};
 
+	for i in 0..5 { // 5 tries
+		let q = db.get_ref().query_opt(
+			"SELECT token FROM tokens INNER JOIN links ON tokens.id = links.author WHERE slug = $1;",
+			&[&slug]).await;
+		let other_tok: String = match q {
+			Ok(Some(tok)) => tok.get(0),
+			Ok(None) => break,
+			Err(_) => return HttpResponse::InternalServerError().finish(),
+		};
+
+		// The slug is not free
+
+		if chosen_slug { // The user only wants this slug: either free it or err
+			let q = if auth == 3 {
+				db.get_ref().execute("DELETE FROM links WHERE slug = $1", &[&slug]).await
+			} else {
+				if other_tok == token {
+					db.get_ref().execute("DELETE FROM links WHERE slug = $1", &[&slug]).await
+				} else {
+					return HttpResponse::Conflict().body("Slug not available");
+				}
+			};
+			match q {
+				Ok(_) => break, // We are ok to insert the link now
+				Err(_) => return HttpResponse::InternalServerError().finish(),
+			}
+		}
+
+		// We failed to update the link
+
+		if i == 4 { // Give up on the 5th try
+			return HttpResponse::Conflict().body("Slug not available");
+		}
+
+		slug = new_ident(match auth {
+			2 => 6, // Throw away partial chosen slugs from level 2 users because why not
+			3 => 4,
+			_ => 8,
+		});
+	}
+
 	let q = db.get_ref().execute(
-		"INSERT INTO links (slug, destination, expiry, token) VALUES ($1, $2, $3, $4)",
+		"INSERT INTO links (slug, destination, expiry, author) VALUES ($1, $2, $3, $4)",
 		&[&slug, &destination.as_str(), &expiry, &id]).await;
 	if let Err(_) = q {
 		return HttpResponse::InternalServerError().finish() //FIXME: handling for if selected slug already taken (409)
@@ -146,7 +185,7 @@ async fn handle_new_link(db: Db, body: Json<APILink>, r: HttpRequest) -> impl Re
 		Err(_) => return HttpResponse::InternalServerError().finish(),
 	};
 
-	HttpResponse::Created().json(APILink {
+	HttpResponse::Ok().json(APILink {
 		slug: Some(slug),
 		destination,
 		created,
@@ -255,7 +294,7 @@ async fn handle_new_token(db: Db, token: Path<String>, body: Json<HashMap<String
 		return HttpResponse::InternalServerError().finish();
 	}
 
-	HttpResponse::Created().json(("token", token))
+	HttpResponse::Ok().json(("token", token))
 }
 
 // /invites/
@@ -291,7 +330,7 @@ async fn handle_new_invite(db: Db, body: Json<Invite>, r: HttpRequest) -> impl R
 					return HttpResponse::InternalServerError().finish();
 				}
 
-				HttpResponse::Created().json(("invite-uri", invite))
+				HttpResponse::Ok().json(("invite-uri", "http://bgdn.cc/invite/".to_string() + &invite))
 			} else { HttpResponse::Forbidden().body("No remaining invites") }
 		},
 		3 => {
@@ -303,7 +342,7 @@ async fn handle_new_invite(db: Db, body: Json<Invite>, r: HttpRequest) -> impl R
 				return HttpResponse::InternalServerError().finish();
 			}
 
-			HttpResponse::Created().json(("invite-uri", invite)) // FIXME: make uri
+			HttpResponse::Ok().json(("invite-uri", "http://bgdn.cc/invite/".to_string() + &invite))
 		},
 		_ => {
 			HttpResponse::Forbidden().finish()
